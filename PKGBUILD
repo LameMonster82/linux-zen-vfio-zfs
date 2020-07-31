@@ -73,11 +73,10 @@ build() {
   echo "Configure ZFS..."
   cd "${srcdir}/zfs-${_zfsver}"
   ./autogen.sh
-  ./configure --prefix=/usr --sysconfdir=/etc --sbindir=/usr/bin --libdir=/usr/lib \
-              --datadir=/usr/share --includedir=/usr/include --with-udevdir=/usr/lib/udev \
-              --libexecdir=/usr/lib --with-config=kernel \
-              --with-linux=${srcdir}/$_srcname \
-              --with-linux-obj=${srcdir}/$_srcname
+  ./configure --with-linux=${srcdir}/$_srcname \
+              --with-linux-obj=${srcdir}/$_srcname --enable-linux-builtin \
+              --prefix=$pkgdir/usr/lib/modules/$(<version)/build --exec-prefix=$pkgdir/usr/lib/modules/$(<version)/build \
+              --without-udevdir --disable-sysvinit --with-config=kernel
   ./copy-builtin ${srcdir}/$_srcname
 
   cd ${srcdir}/$_srcname
