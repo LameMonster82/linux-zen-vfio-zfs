@@ -1,24 +1,28 @@
 # Maintainer: Shayne Hartford<shayneehartford@gmail.com>
 # Upstream: Jan Alexander Steffens (heftig) <jan.steffens@gmail.com>
 
-pkgbase=linux-zen-vfio
-pkgver=5.7.10.zen1
+pkgbase=linux-zen-vfio-zfs
+pkgver=5.7.11.zen1
 pkgrel=1
-pkgdesc='Linux ZEN'
+pkgdesc='Linux ZEN with VFIO patches ZFS support'
+_zfsver="0.8.4"
 _srctag=v${pkgver%.*}-${pkgver##*.}
+_extramodules="${pkgver/.zen/-zen}-zen"
 url="https://github.com/zen-kernel/zen-kernel/commits/$_srctag"
 arch=(x86_64)
-license=(GPL2)
+license=(CDDL)
 makedepends=(
   bc kmod libelf pahole
   xmlto python-sphinx python-sphinx_rtd_theme graphviz imagemagick
-  git
+  git zfs-utils=${_zfsver}
 )
 options=('!strip')
 _srcname=zen-kernel
 source=(
   "$_srcname::git+https://github.com/zen-kernel/zen-kernel?signed#tag=$_srctag"
+  "https://github.com/zfsonlinux/zfs/releases/download/zfs-${_zfsver}/zfs-${_zfsver}.tar.gz"
   config         # the main kernel config file
+  '0001-nonupstream-navi10-vfio-reset.patch'
   add-acs-overrides.patch
   i915-vga-arbiter.patch
   sphinx-workaround.patch
@@ -29,7 +33,9 @@ validpgpkeys=(
   'A2FF3A36AAA56654109064AB19802F8B0D70FC30'  # Jan Alexander Steffens (heftig)
 )
 sha256sums=('SKIP'
-            '4c278bafc2e5a04fd584ca45ddfe8bdacf52d8f5a2aac9df17d7a20479e893bf'
+            '2b988f5777976f09d08083f6bebf6e67219c4c4c183c1f33033fb7e5e5eacafb'
+            '28f871f79b053daae27d9969d4b7e055a472b73a01bc248c830ea9de159ccd65'
+            'f1eec160ce5df5c2ea58d4e4fd44a6b1013863c6b3bf649414cd18c89ae500fa'
             '551d2ec326df256256a9e30d336a074493435fe0dbca77fd18216f9e91c0dd00'
             'ccb814e2c382a59b907ccb183836eda72f21214484e489b5f473beca97856704'
             '8cb21e0b3411327b627a9dd15b8eb773295a0d2782b1a41b2a8839d1b2f5778c')
@@ -64,7 +70,17 @@ prepare() {
 }
 
 build() {
-  cd $_srcname
+  echo "Configure ZFS..."
+  cd "${srcdir}/zfs-${_zfsver}"
+  ./autogen.sh
+  ./configure --prefix=/usr --sysconfdir=/etc --sbindir=/usr/bin --libdir=/usr/lib \
+              --datadir=/usr/share --includedir=/usr/include --with-udevdir=/usr/lib/udev \
+              --libexecdir=/usr/lib --with-config=kernel \
+              --with-linux=${srcdir}/$_srcname \
+              --with-linux-obj=${srcdir}/$_srcname
+  ./copy-builtin ${srcdir}/$_srcname
+
+  cd ${srcdir}/$_srcname
   make all
   make htmldocs
 }
@@ -72,9 +88,11 @@ build() {
 _package() {
   pkgdesc="The $pkgdesc kernel and modules"
   depends=(coreutils kmod initramfs)
+  install=zfs.install
   optdepends=('crda: to set the correct wireless channels of your country'
               'linux-firmware: firmware images needed for some devices')
-  provides=(VIRTUALBOX-GUEST-MODULES WIREGUARD-MODULE)
+  conflicts=("zfs-dkms" "zfs-dkms-git" "zfs-dkms-rc" "spl-dkms" "spl-dkms-git" 'zfs-linux-zen-git' 'spl-linux-zen' 'zfs')
+  provides=(VIRTUALBOX-GUEST-MODULES WIREGUARD-MODULE zfs spl)
   replaces=(virtualbox-guest-modules-arch wireguard-arch)
 
   cd $_srcname
@@ -98,6 +116,8 @@ _package() {
 
 _package-headers() {
   pkgdesc="Headers and scripts for building modules for the $pkgdesc kernel"
+  provides=("zfs-headers" "spl-headers")
+  conflicts=("zfs-headers" "zfs-dkms" "zfs-dkms-git" "zfs-dkms-rc" "spl-dkms" "spl-dkms-git" "spl-headers" 'zfs-headers')
 
   cd $_srcname
   local builddir="$pkgdir/usr/lib/modules/$(<version)/build"
